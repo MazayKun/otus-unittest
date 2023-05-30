@@ -9,8 +9,12 @@ import otus.study.cashmachine.bank.data.Card;
 import otus.study.cashmachine.bank.service.impl.CardServiceImpl;
 
 import java.math.BigDecimal;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
 public class CardServiceTest {
@@ -47,6 +51,8 @@ public class CardServiceTest {
 
         BigDecimal sum = cardService.getBalance("1234", "0000");
         assertEquals(0, sum.compareTo(new BigDecimal(1000)));
+
+        assertThrows(IllegalArgumentException.class, () -> cardService.getBalance("324234234", "1234"));
     }
 
     @Test
@@ -69,6 +75,23 @@ public class CardServiceTest {
 
     @Test
     void putMoney() {
+        long cardId = 10l;
+        String cardNumber = "123456789";
+        long accountId = 0l;
+        String password = "1234";
+        BigDecimal sumToPut = new BigDecimal(100);
+        Card newCard = new Card(cardId, cardNumber, accountId, getHash(password));
+
+        when(cardsDao.getCardByNumber(cardNumber))
+                .thenReturn(newCard);
+        when(accountService.putMoney(accountId, sumToPut))
+                .thenReturn(sumToPut);
+
+        BigDecimal actualSum = cardService.putMoney(cardNumber, password, sumToPut);
+
+        assertEquals(sumToPut, actualSum);
+
+        assertThrows(IllegalArgumentException.class, () -> cardService.putMoney("32423452345", "1234", sumToPut));
     }
 
     @Test
@@ -80,5 +103,34 @@ public class CardServiceTest {
             cardService.getBalance("1234", "0012");
         });
         assertEquals(thrown.getMessage(), "Pincode is incorrect");
+    }
+
+    @Test
+    void changePin() {
+        long cardId = 10l;
+        String cardNumber = "123456789";
+        long accountId = 0l;
+        String password = "1234";
+        Card newCard = new Card(cardId, cardNumber, accountId, getHash(password));
+
+        when(cardsDao.getCardByNumber(cardNumber))
+                .thenReturn(newCard);
+
+        assertTrue(cardService.changePin(cardNumber, password, "54321"));
+
+        verify(cardsDao).saveCard(any());
+
+        assertThrows(IllegalArgumentException.class, () -> cardService.changePin("045969045", password, "54321"));
+    }
+
+    private String getHash(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA1");
+            digest.update(value.getBytes());
+            String result = HexFormat.of().formatHex(digest.digest());
+            return result;
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
